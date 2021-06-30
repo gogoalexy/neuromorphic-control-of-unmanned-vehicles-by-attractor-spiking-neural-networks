@@ -23,6 +23,7 @@ if __name__ == '__main__':
     timer = 0.0
     time = np.linspace(0, 3, 60)
     ord_spikes = [[] for i in range(50)]
+    task_spikes = [[] for i in range(50)]
     ord_counts = [[0] for i in range(5)]
     last_time = 0.0
     counts = [0 for i in range(5)]
@@ -38,6 +39,11 @@ if __name__ == '__main__':
         #        ord2.append(float(line_parse[3]))
         #        ord3.append(float(line_parse[4]))
         #        ord4.append(float(line_parse[5]))
+        with open('task.dat', 'r') as spike_file:
+            for event in spike_file:
+                t, neuron = event.split(' ')
+                task_spikes[int(neuron)-120].append(float(t))
+
         with open('ordinal.dat', 'r') as spike_file:
             for event in spike_file:
                 t, neuron = event.split(' ')
@@ -59,11 +65,10 @@ if __name__ == '__main__':
             while len(ele) < 60:
                 ele.append(0)
                     
-    fig, axs = plt.subplots(2, 1)
-    colors1 = [f'C{i//10}' for i in range(50)]
-    axs[0].set_xlim(-0.1, 3.1)
-    axs[0].eventplot(ord_spikes, linelengths = 0.8, linewidths = 1.0, colors = colors1)
-    axs[1].set_xlim(-0.1, 3.1)
-    axs[1].plot(time, ord_counts[0], time, ord_counts[1], time, ord_counts[2], time, ord_counts[3], time, ord_counts[4])
+    fig, ax = plt.subplots()
+    colors1 = [f'C{i//10}' for i in range(100)]
+    ord_spikes.extend(task_spikes)
+    ax.set_xlim(-0.1, 3.1)
+    ax.eventplot(ord_spikes, linelengths = 0.8, linewidths = 1.0, colors = colors1)
     plt.show()
 

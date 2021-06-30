@@ -107,10 +107,8 @@ population:Ordinal
 EndOutputFile
 
 FileName:task.dat
-Type=FiringRate
-FiringRateWinodw=50
-PrintStep=10
-population:task
+Type=Spike
+population:Task
 EndOutputFile
 
 FileName:shifter.dat

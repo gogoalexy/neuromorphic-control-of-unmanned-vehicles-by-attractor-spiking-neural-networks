@@ -134,10 +134,19 @@ if __name__ == '__main__':
             for i in range(1, success+1):
                 x[i] += 1
 
-    print(f'Y1={x[1]/100}')
-    print(f'Y2={x[2]/100}')
-    print(f'Y3={x[3]/100}')
-    print(f'Y4={x[4]/100}')
+    y = [xi*100/args.num_trial for xi in x]
+    print(f'Y1={y[1]}')
+    print(f'Y2={y[2]}')
+    print(f'Y3={y[3]}')
+    print(f'Y4={y[4]}')
+
+    fig, ax = plt.subplots()
+    catalog = ['Y1', 'Y2', 'Y3', 'Y4']
+    plt.bar(catalog, y[1:], color='gray')
+    for i, j in enumerate(y[1:]):
+        ax.text(i-0.2, j + 0.01, f'{round(j, 2)}%', color='black', fontweight='bold')
+    plt.ylabel('Transitions successful (%)')
+    plt.show()
     
 
     
