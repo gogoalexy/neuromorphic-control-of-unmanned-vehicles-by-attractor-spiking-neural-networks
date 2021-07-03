@@ -5,14 +5,14 @@ import numpy as np
 
 class FlysimSNN:
 
-    def __init__(self, trial_time, iterations):
+    def __init__(self, trial_time, iterations, dat_base_name='network'):
         self.network = nx.DiGraph()
         self.subgraph = {}
         self.iter = iterations
         self.protocol = StimulationProtocol(trial_time)
         self.id_counter = 0
-        self.conf_name = 'ssm.conf'
-        self.pro_name = 'ssm.pro'
+        self.conf_name = f'{dat_base_name}.conf'
+        self.pro_name = f'{dat_base_name}.pro'
 
     def addNeuron(self, name, n=1, c=0.5, leakyC=10, taum=20, threshold=-50, restpot=-70, resetpot=-55, refracperiod=20, spikedly=0, selfconnect=False):
         conf = NeuralPopulation(name, n, c, leakyC, taum, threshold, restpot, resetpot, refracperiod, spikedly, selfconnect)
@@ -24,17 +24,21 @@ class FlysimSNN:
             neuron = self.getNeuron(neuron_name)
             neuron['config'].haveReceptor(receptpr_type, tau, revpot, freqext, meanexteff, meanextconn)
 
-    def addCoonection(self, name, receptor, mean_effect=0.0, weight=1.0, connectivity=1.0):
-        if self.isNeuronExist(name):
-            neuron = self.getNeuron(neuron_name)
-            neuron['config'].innervate(receptpr_type, tau, revpot, freqext, meanexteff, meanextconn)
+    def addCoonection(self, source_name, target_name, receptor, mean_effect=0.0, weight=1.0, connectivity=1.0):
+        if self.isNeuronExist(soure_name) and self.isNeuronExist(target_name):
+            neuron = self.getNeuron(source_name)
+            neuron['config'].innervate(target_name, receptpr_type, tau, revpot, freqext, meanexteff, meanextconn)
 
     def addStimulus(self, stimulus_type, time_point, to, *args):
         if self.isNeuronExist(to) or self.protocol.isGroupExist(to):
             if stimulus_type == 'current':
-                self.protocol.injectCurrent(time_point, to, *args)
+                self.protocol.injectCurrent(time_point[0], to, *args)
+                if time_point[1] != None:
+                    self.protocol.injectCurrent(time_point[1], to, 0, 0)
             elif stimulus_type == 'spike':
-                self.protocol.injectSpikes(time_point, to, *args)
+                self.protocol.injectSpikes(time_point[0], to, *args)
+                if time_point[1] != None:
+                    self.protocol.injectSpikes(time_point[1], to, args[0], 0)
         else:
             return
 
@@ -158,7 +162,7 @@ class NeuralPopulation:
         self.receptorConf += receptor.getConf()
 
     def innervate(self, target, receptor, mean_effect, weight, connectivity):
-        connection = self.TargetPopulation(target.Name, receptor, mean_effect, weight, connectivity)
+        connection = self.TargetPopulation(target, receptor, mean_effect, weight, connectivity)
         self.connectionConf += connection.getConf()
 
     def getConf(self):
@@ -258,10 +262,10 @@ class StimulationProtocol:
         return out
 
 if __name__ == '__main__':
-    sim = FlysimSNN(1000, 100)
+    sim = FlysimSNN(1000, 100, 'ssm')
     sim.addNeuron('Task')
     sim.addReceptor('Task', 'AMPA')
-    sim.addStimulus('current', 500, 'Task', 'AMPA', 100)
+    sim.addStimulus('current', (500, 550), 'Task', 10, 100)
     sim.defineOutput('Spike', 'spike.dat', 'Task')
     sim.start()
 
