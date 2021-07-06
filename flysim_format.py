@@ -6,6 +6,7 @@ import numpy as np
 class FlysimSNN:
 
     def __init__(self, trial_time, iterations, dat_base_name='network'):
+        self.flysim_target = 'simulators/sim08_15/flysim.out'
         self.network = nx.DiGraph()
         self.subgraph = {}
         self.iter = iterations
@@ -14,7 +15,7 @@ class FlysimSNN:
         self.conf_name = f'{dat_base_name}.conf'
         self.pro_name = f'{dat_base_name}.pro'
 
-    def addNeuron(self, name, n=1, c=0.5, leakyC=10, taum=20, threshold=-50, restpot=-70, resetpot=-55, refracperiod=20, spikedly=0, selfconnect=False):
+    def addNeuron(self, name, n=1, c=0.5, leakyC=2.5, taum=20, threshold=-50, restpot=-70, resetpot=-55, refracperiod=20, spikedly=0, selfconnect=False):
         conf = NeuralPopulation(name, n, c, leakyC, taum, threshold, restpot, resetpot, refracperiod, spikedly, selfconnect)
         self.network.add_node(name, id=self.id_counter, spike_count=0, config=conf)
         self.id_counter += 1
@@ -25,9 +26,9 @@ class FlysimSNN:
             neuron['config'].haveReceptor(receptpr_type, tau, revpot, freqext, meanexteff, meanextconn)
 
     def addCoonection(self, source_name, target_name, receptor, mean_effect=0.0, weight=1.0, connectivity=1.0):
-        if self.isNeuronExist(soure_name) and self.isNeuronExist(target_name):
+        if self.isNeuronExist(source_name) and self.isNeuronExist(target_name):
             neuron = self.getNeuron(source_name)
-            neuron['config'].innervate(target_name, receptpr_type, tau, revpot, freqext, meanexteff, meanextconn)
+            neuron['config'].innervate(target_name, receptor, mean_effect, weight, connectivity)
 
     def addStimulus(self, stimulus_type, time_point, to, *args):
         if self.isNeuronExist(to) or self.protocol.isGroupExist(to):
@@ -49,7 +50,7 @@ class FlysimSNN:
         self.protocol.addGroup(group_name, group_members)
 
     def defineOutput(self, format, file_name, target, **kwargs):
-        if self.isNeuronExist(target) or self.protocol.isGroupExist(target):
+        if self.isNeuronExist(target) or self.protocol.isGroupExist(target) or target=='AllPopulation':
             if format == 'FiringRate':
                 self.protocol.outputFiringRates(file_name, target, kwargs)
             elif format == 'Spike':
@@ -88,7 +89,7 @@ class FlysimSNN:
     def start(self):
         self.generateConf()
         self.generatePro()
-        #subprocess.call([flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter)])
+        subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter)])
     
 
 class NeuralPopulation:
@@ -136,7 +137,7 @@ class NeuralPopulation:
                       f'FreqExt={self.FreqExt}\n' + \
                       f'MeanExtEff={self.MeanExtEff}\n' + \
                       f'MeanExtCon={self.MeanExtCon}\n' + \
-                      'EndReceptor\n\n'
+                      'EndReceptor\n'
             else:
                 out = ''
             return out
@@ -154,7 +155,7 @@ class NeuralPopulation:
                   f'TargetReceptor={self.Receptor}\n' + \
                   f'MeanEff={self.MeanEff}\n' + \
                   f'weight={self.Weight}\n' + \
-                  'EndTargetPopulation\n\n'
+                  'EndTargetPopulation\n'
             return out
 
     def haveReceptor(self, receptor_type, tau, revpot, freqext, meanexteff, meanextconn):
@@ -205,9 +206,10 @@ class StimulationProtocol:
         self.events.append({'time': time_point, 'type': 'ChangeExtFreq', 'to': to, 'receptor': receptor, 'hz': hz})
 
     def isGroupExist(self, group_name):
-        if self.groups[group_name]:
+        try:
+            g = self.groups[group_name]
             return True
-        else:
+        except:
             return False
 
     def periodicStimuli(self, start, end, interval, duration, stimuli_type, to, *args):
