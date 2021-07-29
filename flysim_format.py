@@ -52,7 +52,7 @@ class FlysimSNN:
     def defineOutput(self, format, file_name, target, **kwargs):
         if self.isNeuronExist(target) or self.protocol.isGroupExist(target) or target=='AllPopulation':
             if format == 'FiringRate':
-                self.protocol.outputFiringRates(file_name, target, kwargs)
+                self.protocol.outputFiringRates(file_name, target, **kwargs)
             elif format == 'Spike':
                 self.protocol.outputSpikes(file_name, target)
             elif format == 'MemPot':
@@ -86,10 +86,10 @@ class FlysimSNN:
         else:
             return True
 
-    def start(self):
+    def start(self, thread=1):
         self.generateConf()
         self.generatePro()
-        subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter)])
+        subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter), '-t', str(thread)])
     
 
 class NeuralPopulation:

@@ -1,3 +1,4 @@
+import random
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,17 +7,17 @@ from flysim_format import FlysimSNN
 
 class SNNStateMachine:
 
-    def __init__(self, length, fork=False, cos=False, transitions=0, experiment_time=1000, repetition=100):
-        self.length = length
+    def __init__(self, trunk_length, fork_pos_len=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100):
+        self.length = trunk_length
         self.transitions = transitions
-        self.enableFork = fork
-        self.enableCoS = cos
-        self.log_filename_base = 'ssm'
+        self.fork_pos_len = fork_pos_len
+        self.log_filename_base = 'ssc'
         self.repete = repetition
         self.sim = FlysimSNN(experiment_time, repetition, self.log_filename_base)
         self.stimulus = {'total_time': experiment_time}
         self.time_window = 0.05
         self.population_size = 10
+        self.task_weights = task_weights
         self.spawnNodes()
         self.assembleNodes()
         self.setOutputs()
@@ -28,6 +29,21 @@ class SNNStateMachine:
         self.sim.addReceptor('OrdinalInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('TaskInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('Next', 'AMPA', tau=1, meanexteff=10)
+        if self.fork_pos_len:
+            for pair in self.fork_pos_len:
+                pass
+        if self.task_weights:
+            self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55)
+            self.sim.addReceptor('TaskTarget', 'AMPA', tau=20, meanexteff=10.5)
+            self.sim.addReceptor('TaskTarget', 'GABA', tau=5, revpot=-90, meanexteff=0)
+            self.sim.addNeuron('CurrentStatus', n=self.population_size, c=0.5, taum=10, restpot=-55)
+            self.sim.addReceptor('CurrentStatus', 'AMPA', tau=20, meanexteff=10.5)
+            self.sim.addReceptor('CurrentStatus', 'GABA', tau=5, revpot=-90, meanexteff=0)
+            self.sim.addCoonection('TaskTarget', 'TaskTarget', 'AMPA', 0.05)
+            self.sim.addCoonection('CurrentStatus', 'CurrentStatus', 'AMPA', 0.05)
+            self.sim.addCoonection('TaskTarget', 'CurrentStatus', 'GABA', 5.0)
+            self.sim.addCoonection('CurrentStatus', 'TaskTarget', 'GABA', 5.0)
+            self.sim.addCoonection('CurrentStatus', 'Next', 'AMPA', 1.0)
         for id in range(self.length):
             self.declareNodeNeurons(id)
             self.sim.addCoonection(f'Ordinal{id}', 'OrdinalInh', 'AMPA', 0.5)
@@ -52,6 +68,9 @@ class SNNStateMachine:
         self.sim.addCoonection(f'Ordinal{id}', f'Task{id}', 'AMPA', 4)
         self.sim.addCoonection(f'Ordinal{id}', f'Shifter{id}', 'AMPA', 0.4)
         self.sim.addCoonection(f'Ordinal{id}', f'Ordinal{id}', 'AMPA', 2.5)
+        if self.task_weights:
+            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', self.task_weights[id])
+            
 
     def assembleNodes(self):
         prev_id = -1
@@ -61,9 +80,7 @@ class SNNStateMachine:
                 continue
             self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
             prev_id = id
-        if self.enableFork:
-            pass
-        if self.enableCoS:
+        if self.fork_pos_len:
             pass
 
     def spawnAttractor(self, start, duration, stimulus_type, *args):
@@ -72,8 +89,14 @@ class SNNStateMachine:
     def generateTransitionStimuli(self, stimulus_type, *args):
         for i in range(self.transitions):
             start = self.stimulus['start'] + i*self.stimulus['interval']
-            end = start + self.stimulus['duration']
-            self.sim.addStimulus(stimulus_type, (start, end), 'Next', *args)
+            if isinstance(self.stimulus['duration'], list):
+                end = start + self.stimulus['duration'][i]
+            else:
+                end = start + self.stimulus['duration']
+            if self.task_weights:
+                self.sim.addStimulus(stimulus_type, (start, end), 'CurrentStatus', *args)
+            else:
+                self.sim.addStimulus(stimulus_type, (start, end), 'Next', *args)
 
     def setTransitionPeriod(self, start, duration, interval):
         if start > self.stimulus['total_time']:
@@ -83,10 +106,11 @@ class SNNStateMachine:
         self.stimulus['duration'] = duration
 
     def setOutputs(self):
-        self.sim.defineOutput('Spike', f'{self.log_filename_base}_task.dat', 'AllPopulation')
+        self.sim.defineOutput('Spike', f'{self.log_filename_base}_all.dat', 'AllPopulation')
+        self.sim.defineOutput('Spike', f'{self.log_filename_base}_task.dat', 'Task')
 
-    def startSimulation(self):
-        self.sim.start()
+    def startSimulation(self, thread=1):
+        self.sim.start(thread)
 
     def getBumps(self, spike_ratios, threshold):
         """Find the intervals of spike ratios are greater than the threshold."""
@@ -150,11 +174,11 @@ class SNNStateMachine:
         return counter
 
     def calculateRobustness(self):
-        bumps = []
-        trans = []
         x = [0 for i in range(self.length)]
         base_id = self.sim.getNeuron('Ordinal0')['id'] * self.population_size
         for trial in range(self.repete):
+            bumps = []
+            trans = []
             task_spike_ratios = [[] for i in range(self.length)]
             spike_counts = [0 for i in range(self.length)]
             time_boundary = self.time_window
@@ -190,35 +214,60 @@ class SNNStateMachine:
                     else:
                         trans.extend(self.getTransition(prev_bump, bump))
                         prev_bump = bump
-                print(bumps)
                 success = self.getNumberConsecutiveSuccessTransitions(trans, self.getGroundTruthTransition())
                 for i in range(1, success+1):
                     x[i] += 1
+        return x
 
     def plotStimulusRobustness(self):
         pass
         
     def plotRaster(self, save=False, show=True, name_modifier=''):
-        task_spikes = [[] for i in range(180)]
-        with open(f'{self.log_filename_base}_task.dat', 'r') as spike_file:
+        if self.task_weights:
+            num_neuron = 200
+            colors1 = [f'C{i//10+7}' for i in range(50)]
+        else:
+            colors1 = [f'C{i//10+7}' for i in range(30)]
+            num_neuron = 180
+        task_spikes = [[] for i in range(num_neuron)]
+        with open(f'{self.log_filename_base}_all.dat', 'r') as spike_file:
             for event in spike_file:
                 t, neuron = event.split(' ')
                 task_spikes[int(neuron)].append(float(t))
                     
         fig, ax = plt.subplots()
-        colors1 = [f'C{i//10}' for i in range(180)]
+        
+        colors2 = [f'C{i//10}' for i in range(30)]
+        colors1.extend(colors2*5)
         ax.set_xlim(-0.1, 3.1)
-        ax.eventplot(task_spikes, linelengths = 0.8, linewidths = 1.0, colors = colors1)
+        if self.task_weights:
+            plt.vlines([x for x in np.arange(1.0, 3.0, 0.5)], -5, 185, colors='r', linestyles='dashed')
+            
+            plt.hlines([20, 30, 50, 80, 110, 140, 170], -0.1, 3.1)
+            ytick = [x for x in range(65, num_neuron, 30)]
+            ytick.insert(0, 40)
+            ax.set_yticklabels(['Inh', 'Next', 'CoS', 'Node 1', 'Node 2', 'Node 3', 'Node 4', 'Node 5'])
+        else:
+            plt.vlines([x for x in np.arange(1.0, 3.0, 0.5)], -5, 185, colors='r', linestyles='dashed')
+            plt.hlines([20, 30, 60, 90, 120, 150], -0.1, 3.1)
+            ytick = [x for x in range(45, 180, 30)]
+            ax.set_yticklabels(['Inh', 'Next', 'Node 1', 'Node 2', 'Node 3', 'Node 4', 'Node 5'])
+            
+        ytick.insert(0, 25)
+        ytick.insert(0, 10)
+        ax.set_xlabel('Time (s)')
+        ax.set_yticks(ytick)
+        ax.eventplot(task_spikes, linelengths = 0.8, linewidths = 1.5, colors = colors1)
         if save:
             plt.savefig(f'{self.log_filename_base}_{name_modifier}.png')
         if show:
             plt.show()
                 
 if __name__ == '__main__':
-    ssm = SNNStateMachine(5, transitions=4, experiment_time=3000, repetition=3)
+    ssm = SNNStateMachine(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
     ssm.setTransitionPeriod(500, 50, 500)
     ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
-    ssm.generateTransitionStimuli('spike', 'AMPA', 260)
+    ssm.generateTransitionStimuli('spike', 'AMPA', 250)
     ssm.startSimulation()
     #ssm.calculateRobustness()
     ssm.plotRaster()
