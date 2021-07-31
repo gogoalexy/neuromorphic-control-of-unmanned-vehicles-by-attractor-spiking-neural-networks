@@ -7,10 +7,10 @@ from flysim_format import FlysimSNN
 
 class SNNStateMachine:
 
-    def __init__(self, trunk_length, fork_pos_len=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100):
+    def __init__(self, trunk_length, fork_pos_len_w=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100):
         self.length = trunk_length
         self.transitions = transitions
-        self.fork_pos_len = fork_pos_len
+        self.fork_pos_len_w = fork_pos_len_w
         self.log_filename_base = 'ssc'
         self.repete = repetition
         self.sim = FlysimSNN(experiment_time, repetition, self.log_filename_base)
@@ -29,9 +29,9 @@ class SNNStateMachine:
         self.sim.addReceptor('OrdinalInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('TaskInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('Next', 'AMPA', tau=1, meanexteff=10)
-        if self.fork_pos_len:
-            for pair in self.fork_pos_len:
-                pass
+        if self.fork_pos_len_w:
+            for index, pair in enumerate(self.fork_pos_len_w, start=1):
+                self.concatenateBranch(pair, index)
         if self.task_weights:
             self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55)
             self.sim.addReceptor('TaskTarget', 'AMPA', tau=20, meanexteff=10.5)
@@ -55,7 +55,28 @@ class SNNStateMachine:
         self.sim.defineGroup('Task', [f'Task{id}' for id in range(self.length)])
         self.sim.defineGroup('Shifter', [f'Shifter{id}' for id in range(self.length)])
 
-    def declareNodeNeurons(self, id):
+    def concatenateBranch(self, pos_len_w, id):
+        if pos_len_w[0] < self.length:
+            if pos_len_w[1] > 9:
+                raise Exception('Individual branch length should not exceed 9 nodes.')
+            self.sim.addNeuron(f'OrdinalInh{index}', n=self.population_size, taum=5)
+            self.sim.addNeuron(f'TaskInh{index}', n=self.population_size)
+            self.sim.addNeuron(f'Switch{index}', n=self.population_size, c=0.1, taum=3, restpot=-55)
+            self.sim.addReceptor('OrdinalInh{index}', 'AMPA', tau=20, meanexteff=10.5)
+            self.sim.addReceptor('TaskInh{index}', 'AMPA', tau=20, meanexteff=10.5)
+            self.sim.addReceptor('Switch{index}', 'AMPA', tau=1, meanexteff=10)
+            for subid in range(pair[1]):
+                if len(pos_len_w) == 3:
+                    self.declareNodeNeurons(pos_len_w[0]+subid/10, pos_len_w[2])
+                else:
+                    self.declareNodeNeurons(pos_len_w[0]+subid/10)
+                    self.sim.addCoonection(f'Ordinal{id}', 'OrdinalInh', 'AMPA', 0.5)
+                    self.sim.addCoonection(f'Task{id}', 'TaskInh', 'AMPA', 1.0)
+                    self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
+                    self.sim.addCoonection('OrdinalInh', f'Ordinal{id}', 'GABA', 10)
+                    self.sim.addCoonection('TaskInh', f'Task{id}', 'GABA', 50.0)
+
+    def declareNodeNeurons(self, id, fork_task_weights=None):
         self.sim.addNeuron(f'Ordinal{id}', n=self.population_size)
         self.sim.addNeuron(f'Task{id}', n=self.population_size)
         self.sim.addNeuron(f'Shifter{id}', n=self.population_size, c=0.1, taum=1.0)
@@ -70,6 +91,8 @@ class SNNStateMachine:
         self.sim.addCoonection(f'Ordinal{id}', f'Ordinal{id}', 'AMPA', 2.5)
         if self.task_weights:
             self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', self.task_weights[id])
+        if fork_task_weights:
+            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', fork_task_weights[id%10])
             
 
     def assembleNodes(self):
@@ -80,7 +103,7 @@ class SNNStateMachine:
                 continue
             self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
             prev_id = id
-        if self.fork_pos_len:
+        if self.fork_pos_len_w:
             pass
 
     def spawnAttractor(self, start, duration, stimulus_type, *args):
@@ -112,7 +135,7 @@ class SNNStateMachine:
     def startSimulation(self, thread=1):
         self.sim.start(thread)
 
-    def getBumps(self, spike_ratios, threshold):
+    def getBumps(self, spike_ratios, threshold=0.5):
         """Find the intervals of spike ratios are greater than the threshold."""
         bump_durations = []
         winning_streak = False
@@ -223,12 +246,24 @@ class SNNStateMachine:
         pass
         
     def plotRaster(self, save=False, show=True, name_modifier=''):
+        num_neuron = 30 + 30*self.length
+        hl = [20, 30]
+        neuron_labels = ['Inh', 'Next']
         if self.task_weights:
-            num_neuron = 200
-            colors1 = [f'C{i//10+7}' for i in range(50)]
+            num_neuron += 20
+            colors1 = [f'C{i//10+7}' for i in range(30)]
+            colorcos =[f'C{i//10+3}' for i in range(20)]
+            colors1.extend(colorcos)
+            hl.append(50)
+            neuron_labels.append('CoS')
+            ytick = [x for x in range(65, num_neuron, 30)]
+            ytick.insert(0, 40)
         else:
             colors1 = [f'C{i//10+7}' for i in range(30)]
-            num_neuron = 180
+            ytick = [x for x in range(45, num_neuron, 30)]
+        vl = [x for x in np.arange(self.stimulus['start']/1000, self.stimulus['start']/1000+self.stimulus['interval']/1000*self.transitions, self.stimulus['interval']/1000)]
+        neuron_labels.extend([f'Node{i}' for i in range(1, self.length+1)])
+        hl.extend([i for i in range(hl[-1], num_neuron, 30)])
         task_spikes = [[] for i in range(num_neuron)]
         with open(f'{self.log_filename_base}_all.dat', 'r') as spike_file:
             for event in spike_file:
@@ -236,28 +271,18 @@ class SNNStateMachine:
                 task_spikes[int(neuron)].append(float(t))
                     
         fig, ax = plt.subplots()
-        
         colors2 = [f'C{i//10}' for i in range(30)]
-        colors1.extend(colors2*5)
-        ax.set_xlim(-0.1, 3.1)
-        if self.task_weights:
-            plt.vlines([x for x in np.arange(1.0, 3.0, 0.5)], -5, 185, colors='r', linestyles='dashed')
-            
-            plt.hlines([20, 30, 50, 80, 110, 140, 170], -0.1, 3.1)
-            ytick = [x for x in range(65, num_neuron, 30)]
-            ytick.insert(0, 40)
-            ax.set_yticklabels(['Inh', 'Next', 'CoS', 'Node 1', 'Node 2', 'Node 3', 'Node 4', 'Node 5'])
-        else:
-            plt.vlines([x for x in np.arange(1.0, 3.0, 0.5)], -5, 185, colors='r', linestyles='dashed')
-            plt.hlines([20, 30, 60, 90, 120, 150], -0.1, 3.1)
-            ytick = [x for x in range(45, 180, 30)]
-            ax.set_yticklabels(['Inh', 'Next', 'Node 1', 'Node 2', 'Node 3', 'Node 4', 'Node 5'])
-            
+        colors1.extend(colors2*self.length)
+        ax.set_xlim(0.0, self.stimulus['total_time']/1000)
+        ax.set_ylim(0, num_neuron)     
+        plt.hlines(hl, -0.1, self.stimulus['total_time']+0.1)
+        plt.vlines(vl, 0, num_neuron, colors='r', linestyles='dashed')
         ytick.insert(0, 25)
         ytick.insert(0, 10)
+        ax.set_yticklabels(neuron_labels)
         ax.set_xlabel('Time (s)')
         ax.set_yticks(ytick)
-        ax.eventplot(task_spikes, linelengths = 0.8, linewidths = 1.5, colors = colors1)
+        ax.eventplot(task_spikes, linelengths = 0.8, linewidths = 1.0, colors = colors1)
         if save:
             plt.savefig(f'{self.log_filename_base}_{name_modifier}.png')
         if show:

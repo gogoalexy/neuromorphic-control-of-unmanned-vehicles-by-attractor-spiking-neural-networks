@@ -8,12 +8,10 @@ from ssm import SNNStateMachine
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-sn', '--scan-next', action='store_true')
-    parser.add_argument('-st', '--scan-task', action='store_true')
-    parser.add_argument('-sd', '--scan-decision', action='store_true')
+    parser.add_argument('target', choices=['next', 'task', 'decision', 'cos'])
     args = parser.parse_args()
     
-    if args.scan_next:
+    if args.next:
         results = []
         stimulus_duration_list = [d for d in range(0, 1050, 50)]
         stimulus_strength_list = [s for s in range(0, 1050, 50)]
@@ -45,7 +43,7 @@ if __name__ == '__main__':
         ax.set_ylabel('Stimulus Duration')
         plt.show()
         
-    if args.scan_task:
+    if args.task:
         stimulus_duration_list = [d for d in range(0, 550, 50)]
         stimulus_strength_list = [s for s in range(0, 550, 50)]
         task_weight_list = [0.01, 0.1, 1.0, 3.0, 5.0, 10.0]
@@ -79,7 +77,7 @@ if __name__ == '__main__':
             ax.set_ylabel('Stimulus Duration')
             plt.show()
             
-    if args.scan_decision:
+    if args.decision:
         mean_rates = []
         weights = np.linspace(0.0, 2.0, 400)
         for w in weights:
@@ -123,4 +121,24 @@ if __name__ == '__main__':
         ax.set_xlabel('Connection weight')
         ax.set_ylabel('Mean firing rate (Hz)')
         plt.show()
-        
+    
+    if args.cos:  
+        for weight in np.logspace(0.1, 10, 10):
+            results = []
+            for strength in range(100, 1000, 100):
+                row = []
+                for duration in range(50, 500, 50):
+                    ssc = SNNStateMachine(2, transitions=1, task_weights=[weight, weight], experiment_time=1000, repetition=1)
+                    ssc.setTransitionPeriod(500, duration, 500)
+                    ssc.generateTransitionStimuli('spike', 'AMPA', strength)
+                    ssc.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
+                    ssc.startSimulation()
+                    x0, x1 = ssc.calculateRobustness()
+                    row.append(x1)
+                    #ssc.plotRaster()
+                results.insert(0, row)
+    
+            fig = plt.figure()
+            ax = fig.add_subplot()
+            im = ax.imshow(np.array(results))
+            plt.show()
