@@ -11,9 +11,10 @@ if __name__ == '__main__':
         ssc.setTransitionPeriod(1000, 50, 500)
         ssc.generateTransitionStimuli('spike', 'AMPA', 250)
     elif args.configuration == 'branched':
-        ssc = SNNStateMachine(5, transitions=4, experiment_time=3000, repetition=1)
+        ssc = SNNStateMachine(5, transitions=4, fork_pos_len_w=[(2, 2)], experiment_time=3000, repetition=1)
         ssc.setTransitionPeriod(1000, 50, 500)
         ssc.generateTransitionStimuli('spike', 'AMPA', 250)
+        ssc.plotNetwork()
     elif args.configuration == 'cos':
         ssc = SNNStateMachine(5, transitions=4, task_weights=[0.5, 0.8, 1.0, 1.3, 1.5], experiment_time=3000, repetition=1)
         ssc.setTransitionPeriod(1000, [60, 70, 90, 120], 500)

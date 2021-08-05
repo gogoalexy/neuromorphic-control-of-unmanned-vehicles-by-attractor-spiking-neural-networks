@@ -15,10 +15,12 @@ class FlysimSNN:
         self.conf_name = f'{dat_base_name}.conf'
         self.pro_name = f'{dat_base_name}.pro'
 
-    def addNeuron(self, name, n=1, c=0.5, leakyC=2.5, taum=20, threshold=-50, restpot=-70, resetpot=-55, refracperiod=20, spikedly=0, selfconnect=False):
+    def addNeuron(self, name, n=1, c=0.5, leakyC=2.5, taum=20, threshold=-50, restpot=-70, resetpot=-55, refracperiod=20, spikedly=0, selfconnect=False, layer=None):
         conf = NeuralPopulation(name, n, c, leakyC, taum, threshold, restpot, resetpot, refracperiod, spikedly, selfconnect)
         self.network.add_node(name, id=self.id_counter, spike_count=0, config=conf)
         self.id_counter += 1
+        if layer:
+            self.network.nodes[name]['layer'] = layer
 
     def addReceptor(self, neuron_name, receptpr_type, tau=10, revpot=0, freqext=0.0, meanexteff=0.0, meanextconn=1.0):
         if self.isNeuronExist(neuron_name):
@@ -27,6 +29,7 @@ class FlysimSNN:
 
     def addCoonection(self, source_name, target_name, receptor, mean_effect=0.0, weight=1.0, connectivity=1.0):
         if self.isNeuronExist(source_name) and self.isNeuronExist(target_name):
+            self.network.add_edge(source_name, target_name)
             neuron = self.getNeuron(source_name)
             neuron['config'].innervate(target_name, receptor, mean_effect, weight, connectivity)
 

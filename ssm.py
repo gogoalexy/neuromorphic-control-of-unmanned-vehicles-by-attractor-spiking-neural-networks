@@ -2,6 +2,7 @@ import random
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import networkx as nx
 
 from flysim_format import FlysimSNN
 
@@ -23,20 +24,17 @@ class SNNStateMachine:
         self.setOutputs()
 
     def spawnNodes(self):
-        self.sim.addNeuron('OrdinalInh', n=self.population_size, taum=5)
-        self.sim.addNeuron('TaskInh', n=self.population_size)
-        self.sim.addNeuron('Next', n=self.population_size, c=0.1, taum=3, restpot=-55)
+        self.sim.addNeuron('OrdinalInh', n=self.population_size, taum=5, layer=2)
+        self.sim.addNeuron('TaskInh', n=self.population_size, layer=3)
+        self.sim.addNeuron('Next', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=1)
         self.sim.addReceptor('OrdinalInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('TaskInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('Next', 'AMPA', tau=1, meanexteff=10)
-        if self.fork_pos_len_w:
-            for index, pair in enumerate(self.fork_pos_len_w, start=1):
-                self.concatenateBranch(pair, index)
         if self.task_weights:
-            self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55)
+            self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=3)
             self.sim.addReceptor('TaskTarget', 'AMPA', tau=20, meanexteff=10.5)
             self.sim.addReceptor('TaskTarget', 'GABA', tau=5, revpot=-90, meanexteff=0)
-            self.sim.addNeuron('CurrentStatus', n=self.population_size, c=0.5, taum=10, restpot=-55)
+            self.sim.addNeuron('CurrentStatus', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=3)
             self.sim.addReceptor('CurrentStatus', 'AMPA', tau=20, meanexteff=10.5)
             self.sim.addReceptor('CurrentStatus', 'GABA', tau=5, revpot=-90, meanexteff=0)
             self.sim.addCoonection('TaskTarget', 'TaskTarget', 'AMPA', 0.05)
@@ -51,35 +49,49 @@ class SNNStateMachine:
             self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
             self.sim.addCoonection('OrdinalInh', f'Ordinal{id}', 'GABA', 10)
             self.sim.addCoonection('TaskInh', f'Task{id}', 'GABA', 50.0)
+        if self.fork_pos_len_w:
+            for pair in self.fork_pos_len_w:
+                self.concatenateBranch(pair)
         self.sim.defineGroup('Ordinal', [f'Ordinal{id}' for id in range(self.length)])
         self.sim.defineGroup('Task', [f'Task{id}' for id in range(self.length)])
         self.sim.defineGroup('Shifter', [f'Shifter{id}' for id in range(self.length)])
 
-    def concatenateBranch(self, pos_len_w, id):
-        if pos_len_w[0] < self.length:
-            if pos_len_w[1] > 9:
-                raise Exception('Individual branch length should not exceed 9 nodes.')
-            self.sim.addNeuron(f'OrdinalInh{index}', n=self.population_size, taum=5)
-            self.sim.addNeuron(f'TaskInh{index}', n=self.population_size)
-            self.sim.addNeuron(f'Switch{index}', n=self.population_size, c=0.1, taum=3, restpot=-55)
-            self.sim.addReceptor('OrdinalInh{index}', 'AMPA', tau=20, meanexteff=10.5)
-            self.sim.addReceptor('TaskInh{index}', 'AMPA', tau=20, meanexteff=10.5)
-            self.sim.addReceptor('Switch{index}', 'AMPA', tau=1, meanexteff=10)
-            for subid in range(pair[1]):
-                if len(pos_len_w) == 3:
-                    self.declareNodeNeurons(pos_len_w[0]+subid/10, pos_len_w[2])
-                else:
-                    self.declareNodeNeurons(pos_len_w[0]+subid/10)
-                    self.sim.addCoonection(f'Ordinal{id}', 'OrdinalInh', 'AMPA', 0.5)
-                    self.sim.addCoonection(f'Task{id}', 'TaskInh', 'AMPA', 1.0)
-                    self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
-                    self.sim.addCoonection('OrdinalInh', f'Ordinal{id}', 'GABA', 10)
-                    self.sim.addCoonection('TaskInh', f'Task{id}', 'GABA', 50.0)
+    def concatenateBranch(self, pos_len_w):
+        if pos_len_w[0] > self.length-1:
+            raise Exception('The branch point excceds the trunk length.')
+        if pos_len_w[1] > 9:
+            raise Exception('Individual branch length should not exceed 9 nodes.')
+        if len(pos_len_w) == 3:
+            pos, length, w = pos_len_w
+        else:
+            pos, length = pos_len_w
+            w = None
+        if self.sim.isNeuronExist(f'Switch{pos}'):
+            raise Exception('Triple branches or above at the same node are not supported yet.')
+        self.sim.addNeuron(f'OrdinalInh{pos}', n=self.population_size, taum=5, layer=5)
+        self.sim.addNeuron(f'TaskInh{pos}', n=self.population_size, layer=6)
+        self.sim.addNeuron(f'Switch{pos}', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=4)
+        self.sim.addReceptor(f'OrdinalInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
+        self.sim.addReceptor(f'TaskInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
+        self.sim.addReceptor(f'Switch{pos}', 'AMPA', tau=1, meanexteff=10)
+        for subid in range(length):
+            id = str(pos) + '.' + str(subid)
+            if w:
+                self.declareNodeNeurons(id, w)
+            else:
+                self.declareNodeNeurons(id)
+            self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh{pos}', 'AMPA', 0.5)
+            self.sim.addCoonection(f'Task{id}', f'TaskInh{pos}', 'AMPA', 1.0)
+            self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
+            self.sim.addCoonection(f'OrdinalInh{pos}', f'Ordinal{id}', 'GABA', 10)
+            self.sim.addCoonection(f'TaskInh{pos}', f'Task{id}', 'GABA', 50.0)
+        self.sim.addCoonection(f'Switch{pos}', f"Ordinal{str(pos)+'.0'}", 'AMPA', 2.0)
+                
 
-    def declareNodeNeurons(self, id, fork_task_weights=None):
-        self.sim.addNeuron(f'Ordinal{id}', n=self.population_size)
-        self.sim.addNeuron(f'Task{id}', n=self.population_size)
-        self.sim.addNeuron(f'Shifter{id}', n=self.population_size, c=0.1, taum=1.0)
+    def declareNodeNeurons(self, id, fork_task_weight=None):
+        self.sim.addNeuron(f'Ordinal{id}', n=self.population_size, layer=5)
+        self.sim.addNeuron(f'Task{id}', n=self.population_size, layer=6)
+        self.sim.addNeuron(f'Shifter{id}', n=self.population_size, c=0.1, taum=1.0, layer=4)
         self.sim.addReceptor(f'Ordinal{id}', 'AMPA', meanexteff=10.5)
         self.sim.addReceptor(f'Ordinal{id}', 'GABA', tau=5, revpot=-90, meanextconn=0.0)
         self.sim.addReceptor(f'Task{id}', 'AMPA', tau=20, meanexteff=10.5)
@@ -91,8 +103,8 @@ class SNNStateMachine:
         self.sim.addCoonection(f'Ordinal{id}', f'Ordinal{id}', 'AMPA', 2.5)
         if self.task_weights:
             self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', self.task_weights[id])
-        if fork_task_weights:
-            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', fork_task_weights[id%10])
+        if fork_task_weight:
+            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', fork_task_weight)
             
 
     def assembleNodes(self):
@@ -104,7 +116,19 @@ class SNNStateMachine:
             self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
             prev_id = id
         if self.fork_pos_len_w:
-            pass
+            for pair in self.fork_pos_len_w:
+                prev_id = -1
+                for subid in range(pair[1]):
+                    id = str(pair[0]) + '.' + str(subid)
+                    if prev_id == -1:
+                        prev_id = id
+                        continue
+                    self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
+                    prev_id = id
+                self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 1.0)
+                self.sim.addCoonection(f'Ordinal{pair[0]+(pair[1]-1)/10}', f'Shifter{pair[0]}', 'AMPA', 1.0)
+                self.sim.addCoonection(f"Ordinal{str(pair[0]) + '.0'}", 'OrdinalInh', 'AMPA', 1.0)
+                self.sim.addCoonection(f'Ordinal{pair[0]+1}', f'OrdinalInh{pair[0]}', 'AMPA', 1.0)
 
     def spawnAttractor(self, start, duration, stimulus_type, *args):
         self.sim.addStimulus(stimulus_type, (start, start + duration), 'Ordinal0', *args)
@@ -245,6 +269,11 @@ class SNNStateMachine:
     def plotStimulusRobustness(self):
         pass
         
+    def plotBranchRaster():
+        pass
+        #for branch_info in fork_pos_len_w:
+        #num_neuron = 
+        
     def plotRaster(self, save=False, show=True, name_modifier=''):
         num_neuron = 30 + 30*self.length
         hl = [20, 30]
@@ -287,7 +316,36 @@ class SNNStateMachine:
             plt.savefig(f'{self.log_filename_base}_{name_modifier}.png')
         if show:
             plt.show()
-                
+
+    def plotNetwork(self):
+        graph = NetworkPlotter(self.sim.network)
+        graph.draw()
+
+class NetworkPlotter:
+    def __init__(self, G, blocking=True):
+        self.subset_color = [
+            "gold",
+            "violet",
+            "limegreen",
+            "darkorange",
+            "violet",
+            "limegreen",
+            "darkorange",
+]
+        self.blocking = blocking
+        self.graph = G
+        if self.blocking == False:
+            plt.ion()
+
+    def draw(self):
+        pos = nx.multipartite_layout(self.graph, subset_key='layer')
+        color = [self.subset_color[data["layer"]] for v, data in self.graph.nodes(data=True)]
+        nx.draw(self.graph, pos, node_color=color, with_labels=True, font_weight='bold')
+        weights = nx.get_edge_attributes(self.graph, 'weight')
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=weights)
+        if self.blocking == True:
+            plt.show()
+
 if __name__ == '__main__':
     ssm = SNNStateMachine(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
     ssm.setTransitionPeriod(500, 50, 500)
