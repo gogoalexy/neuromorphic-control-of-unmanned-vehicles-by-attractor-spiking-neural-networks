@@ -24,17 +24,17 @@ class SNNStateMachine:
         self.setOutputs()
 
     def spawnNodes(self):
-        self.sim.addNeuron('OrdinalInh', n=self.population_size, taum=5, layer=2)
-        self.sim.addNeuron('TaskInh', n=self.population_size, layer=3)
+        self.sim.addNeuron('OrdinalInh', n=self.population_size, taum=5, layer=4)
+        self.sim.addNeuron('TaskInh', n=self.population_size, layer=6)
         self.sim.addNeuron('Next', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=1)
         self.sim.addReceptor('OrdinalInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('TaskInh', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor('Next', 'AMPA', tau=1, meanexteff=10)
         if self.task_weights:
-            self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=3)
+            self.sim.addNeuron('TaskTarget', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=6)
             self.sim.addReceptor('TaskTarget', 'AMPA', tau=20, meanexteff=10.5)
             self.sim.addReceptor('TaskTarget', 'GABA', tau=5, revpot=-90, meanexteff=0)
-            self.sim.addNeuron('CurrentStatus', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=3)
+            self.sim.addNeuron('CurrentStatus', n=self.population_size, c=0.5, taum=10, restpot=-55, layer=6)
             self.sim.addReceptor('CurrentStatus', 'AMPA', tau=20, meanexteff=10.5)
             self.sim.addReceptor('CurrentStatus', 'GABA', tau=5, revpot=-90, meanexteff=0)
             self.sim.addCoonection('TaskTarget', 'TaskTarget', 'AMPA', 0.05)
@@ -68,9 +68,9 @@ class SNNStateMachine:
             w = None
         if self.sim.isNeuronExist(f'Switch{pos}'):
             raise Exception('Triple branches or above at the same node are not supported yet.')
-        self.sim.addNeuron(f'OrdinalInh{pos}', n=self.population_size, taum=5, layer=5)
+        self.sim.addNeuron(f'OrdinalInh{pos}', n=self.population_size, taum=5, layer=4)
         self.sim.addNeuron(f'TaskInh{pos}', n=self.population_size, layer=6)
-        self.sim.addNeuron(f'Switch{pos}', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=4)
+        self.sim.addNeuron(f'Switch{pos}', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=1)
         self.sim.addReceptor(f'OrdinalInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor(f'TaskInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor(f'Switch{pos}', 'AMPA', tau=1, meanexteff=10)
@@ -89,9 +89,9 @@ class SNNStateMachine:
                 
 
     def declareNodeNeurons(self, id, fork_task_weight=None):
-        self.sim.addNeuron(f'Ordinal{id}', n=self.population_size, layer=5)
-        self.sim.addNeuron(f'Task{id}', n=self.population_size, layer=6)
-        self.sim.addNeuron(f'Shifter{id}', n=self.population_size, c=0.1, taum=1.0, layer=4)
+        self.sim.addNeuron(f'Ordinal{id}', n=self.population_size, layer=3)
+        self.sim.addNeuron(f'Task{id}', n=self.population_size, layer=5)
+        self.sim.addNeuron(f'Shifter{id}', n=self.population_size, c=0.1, taum=1.0, layer=2)
         self.sim.addReceptor(f'Ordinal{id}', 'AMPA', meanexteff=10.5)
         self.sim.addReceptor(f'Ordinal{id}', 'GABA', tau=5, revpot=-90, meanextconn=0.0)
         self.sim.addReceptor(f'Task{id}', 'AMPA', tau=20, meanexteff=10.5)
@@ -269,10 +269,32 @@ class SNNStateMachine:
     def plotStimulusRobustness(self):
         pass
         
-    def plotBranchRaster():
-        pass
-        #for branch_info in fork_pos_len_w:
-        #num_neuron = 
+    def insertBranchRaster(self):
+        num_branch_neuron = 0
+        branch_neuron_labels = []
+        num_branch = len(self.fork_pos_len_w)
+        branch_hl = []
+        branch_ytick = []
+        colors = []
+        colors_node = [f'C{i//10}' for i in range(30)]
+        for branch_info in self.fork_pos_len_w:
+            num_branch_neuron += branch_info[1]*30 + 30
+            branch_neuron_labels.extend(['Inh', 'Switch'])
+            branch_neuron_labels.extend([f'Node{branch_info[0]}.{i}' for i in range(branch_info[1])])
+            colors.extend(f'C{i//10+7}' for i in range(30))
+            colors.extend(colors_node*branch_info[1])
+            if branch_ytick:
+                branch_ytick.extend([branch_ytick[-1]+25, branch_ytick[-1]+40])
+                branch_hl.extend([branch_hl[-1]+30, branch_hl[-1]+50, branch_hl[-1]+60])
+            else:
+                branch_ytick.extend([25,40])
+                branch_hl.extend([30, 50, 60])
+            tail = branch_ytick[-1]
+            hl_tail = branch_hl[-1]
+            branch_hl.extend([x for x in range(hl_tail+30, tail+branch_info[1]*30, 30)])
+            branch_ytick.extend([x for x in range(tail+20, tail+20+branch_info[1]*30, 30)])
+        return (num_branch, num_branch_neuron, colors, branch_ytick, branch_hl, branch_neuron_labels)
+            
         
     def plotRaster(self, save=False, show=True, name_modifier=''):
         num_neuron = 30 + 30*self.length
@@ -291,8 +313,22 @@ class SNNStateMachine:
             colors1 = [f'C{i//10+7}' for i in range(30)]
             ytick = [x for x in range(45, num_neuron, 30)]
         vl = [x for x in np.arange(self.stimulus['start']/1000, self.stimulus['start']/1000+self.stimulus['interval']/1000*self.transitions, self.stimulus['interval']/1000)]
-        neuron_labels.extend([f'Node{i}' for i in range(1, self.length+1)])
         hl.extend([i for i in range(hl[-1], num_neuron, 30)])
+        ytick.insert(0, 25)
+        ytick.insert(0, 10)
+        neuron_labels.extend([f'Node{i}' for i in range(self.length)])
+        colors2 = [f'C{i//10}' for i in range(30)]
+        colors1.extend(colors2*self.length)
+        if self.fork_pos_len_w:
+            num_branch, num_branch_neuron, colors, branch_ytick, branch_hl, branch_neuron_labels = self.insertBranchRaster()
+            tick_tail = ytick[-1]
+            hl_tail = hl[-1]
+            ytick.extend(map(lambda x: x + tick_tail, branch_ytick))
+            hl.extend(map(lambda x: x + hl_tail, branch_hl))
+            neuron_labels.extend(branch_neuron_labels)
+            num_neuron += num_branch_neuron
+            colors1.extend(colors)
+            
         task_spikes = [[] for i in range(num_neuron)]
         with open(f'{self.log_filename_base}_all.dat', 'r') as spike_file:
             for event in spike_file:
@@ -300,14 +336,10 @@ class SNNStateMachine:
                 task_spikes[int(neuron)].append(float(t))
                     
         fig, ax = plt.subplots()
-        colors2 = [f'C{i//10}' for i in range(30)]
-        colors1.extend(colors2*self.length)
         ax.set_xlim(0.0, self.stimulus['total_time']/1000)
         ax.set_ylim(0, num_neuron)     
         plt.hlines(hl, -0.1, self.stimulus['total_time']+0.1)
         plt.vlines(vl, 0, num_neuron, colors='r', linestyles='dashed')
-        ytick.insert(0, 25)
-        ytick.insert(0, 10)
         ax.set_yticklabels(neuron_labels)
         ax.set_xlabel('Time (s)')
         ax.set_yticks(ytick)
@@ -322,15 +354,16 @@ class SNNStateMachine:
         graph.draw()
 
 class NetworkPlotter:
+
     def __init__(self, G, blocking=True):
         self.subset_color = [
             "gold",
             "violet",
-            "limegreen",
-            "darkorange",
             "violet",
-            "limegreen",
             "darkorange",
+            "silver",
+            "limegreen",
+            "silver",
 ]
         self.blocking = blocking
         self.graph = G
@@ -338,13 +371,22 @@ class NetworkPlotter:
             plt.ion()
 
     def draw(self):
-        pos = nx.multipartite_layout(self.graph, subset_key='layer')
+        pos = nx.multipartite_layout(self.graph, subset_key='layer', align='horizontal')
         color = [self.subset_color[data["layer"]] for v, data in self.graph.nodes(data=True)]
         nx.draw(self.graph, pos, node_color=color, with_labels=True, font_weight='bold')
         weights = nx.get_edge_attributes(self.graph, 'weight')
         nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=weights)
         if self.blocking == True:
             plt.show()
+
+def shuffle(self, trunk_length=0, fork_probability=0, num_transition=0, switch_probability=0):
+    fork_pos = np.random.binomial(1, fork_probability, trunk_length)
+    fork_len = np.random.randint(1, 10, trunk_length)
+    fork_pos_len = []
+    for index, p, l in enumerate(zip(fork_pos, fork_len)):
+        if p:
+            fork_pos_len.append([index, l])
+
 
 if __name__ == '__main__':
     ssm = SNNStateMachine(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
