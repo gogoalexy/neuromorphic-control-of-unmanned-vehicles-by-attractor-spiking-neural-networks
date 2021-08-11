@@ -15,7 +15,7 @@ class SNNStateMachine:
         self.log_filename_base = 'ssc'
         self.repete = repetition
         self.sim = FlysimSNN(experiment_time, repetition, self.log_filename_base)
-        self.stimulus = {'total_time': experiment_time}
+        self.stimulus = {'total_time': experiment_time, 'individual': []}
         self.time_window = 0.05
         self.population_size = 10
         self.task_weights = task_weights
@@ -125,10 +125,10 @@ class SNNStateMachine:
                         continue
                     self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
                     prev_id = id
-                self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 1.0)
-                self.sim.addCoonection(f'Ordinal{pair[0]+(pair[1]-1)/10}', f'Shifter{pair[0]}', 'AMPA', 1.0)
-                self.sim.addCoonection(f"Ordinal{str(pair[0]) + '.0'}", 'OrdinalInh', 'AMPA', 1.0)
-                self.sim.addCoonection(f'Ordinal{pair[0]+1}', f'OrdinalInh{pair[0]}', 'AMPA', 1.0)
+                self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 0.25)
+                self.sim.addCoonection(f'Shifter{pair[0]+(pair[1]-1)/10}', f'Ordinal{pair[0]}', 'AMPA', 0.4)
+                self.sim.addCoonection(f"Switch{pair[0]}", 'OrdinalInh', 'AMPA', 1.0)
+                self.sim.addCoonection(f'Ordinal{pair[0]}', f'OrdinalInh{pair[0]}', 'AMPA', 0.3)
 
     def spawnAttractor(self, start, duration, stimulus_type, *args):
         self.sim.addStimulus(stimulus_type, (start, start + duration), 'Ordinal0', *args)
@@ -144,6 +144,14 @@ class SNNStateMachine:
                 self.sim.addStimulus(stimulus_type, (start, end), 'CurrentStatus', *args)
             else:
                 self.sim.addStimulus(stimulus_type, (start, end), 'Next', *args)
+                
+    def generateExceptionSwitches(self, stimulus_type, *args):
+        for s, d, pos in self.stimulus['individual']:
+            self.sim.addStimulus(stimulus_type, (s, s+d), f'Switch{pos}', *args)
+                
+    def setSwitchEvents(self, starts, durations):
+        for s, d, fork in zip(starts, durations, self.fork_pos_len_w):
+            self.stimulus['individual'].append([s, d, fork[0]])
 
     def setTransitionPeriod(self, start, duration, interval):
         if start > self.stimulus['total_time']:
@@ -279,7 +287,7 @@ class SNNStateMachine:
         colors_node = [f'C{i//10}' for i in range(30)]
         for branch_info in self.fork_pos_len_w:
             num_branch_neuron += branch_info[1]*30 + 30
-            branch_neuron_labels.extend(['Inh', 'Switch'])
+            branch_neuron_labels.extend([f'Inh{branch_info[0]}', f'Switch{branch_info[0]}'])
             branch_neuron_labels.extend([f'Node{branch_info[0]}.{i}' for i in range(branch_info[1])])
             colors.extend(f'C{i//10+7}' for i in range(30))
             colors.extend(colors_node*branch_info[1])
