@@ -10,7 +10,6 @@ if __name__ == '__main__':
         ssc = SNNStateMachine(5, transitions=4, experiment_time=3000, repetition=1)
         ssc.setTransitionPeriod(1000, 50, 500)
         ssc.generateTransitionStimuli('spike', 'AMPA', 250)
-        ssc.plotNetwork()
     elif args.configuration == 'branched':
         ssc = SNNStateMachine(5, transitions=7, fork_pos_len_w=[(2, 3)], experiment_time=5000, repetition=1)
         ssc.setTransitionPeriod(1000, 50, 500)
@@ -22,6 +21,7 @@ if __name__ == '__main__':
         ssc.setTransitionPeriod(1000, [60, 70, 90, 120], 500)
         ssc.generateTransitionStimuli('spike', 'AMPA', 250)
 
+    ssc.plotNetwork()
     ssc.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
     ssc.startSimulation()
     ssc.plotRaster()

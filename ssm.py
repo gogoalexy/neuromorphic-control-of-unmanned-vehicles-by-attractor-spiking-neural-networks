@@ -68,11 +68,7 @@ class SNNStateMachine:
             w = None
         if self.sim.isNeuronExist(f'Switch{pos}'):
             raise Exception('Triple branches or above at the same node are not supported yet.')
-        self.sim.addNeuron(f'OrdinalInh{pos}', n=self.population_size, taum=5, layer=4)
-        self.sim.addNeuron(f'TaskInh{pos}', n=self.population_size, layer=6)
         self.sim.addNeuron(f'Switch{pos}', n=self.population_size, c=0.1, taum=3, restpot=-55, layer=1)
-        self.sim.addReceptor(f'OrdinalInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
-        self.sim.addReceptor(f'TaskInh{pos}', 'AMPA', tau=20, meanexteff=10.5)
         self.sim.addReceptor(f'Switch{pos}', 'AMPA', tau=1, meanexteff=10)
         for subid in range(length):
             id = str(pos) + '.' + str(subid)
@@ -80,12 +76,16 @@ class SNNStateMachine:
                 self.declareNodeNeurons(id, w)
             else:
                 self.declareNodeNeurons(id)
-            self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh{pos}', 'AMPA', 0.5)
-            self.sim.addCoonection(f'Task{id}', f'TaskInh{pos}', 'AMPA', 1.0)
+            #self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh{pos}', 'AMPA', 0.5)
+            self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh', 'AMPA', 0.5)
+            #self.sim.addCoonection(f'Task{id}', f'TaskInh{pos}', 'AMPA', 1.0)
+            self.sim.addCoonection(f'Task{id}', f'TaskInh', 'AMPA', 1.0)
             self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
-            self.sim.addCoonection(f'OrdinalInh{pos}', f'Ordinal{id}', 'GABA', 10)
-            self.sim.addCoonection(f'TaskInh{pos}', f'Task{id}', 'GABA', 50.0)
-        self.sim.addCoonection(f'Switch{pos}', f"Ordinal{str(pos)+'.0'}", 'AMPA', 2.0)
+            #self.sim.addCoonection(f'OrdinalInh{pos}', f'Ordinal{id}', 'GABA', 10)
+            self.sim.addCoonection(f'OrdinalInh', f'Ordinal{id}', 'GABA', 10)
+            #self.sim.addCoonection(f'TaskInh{pos}', f'Task{id}', 'GABA', 50.0)
+            self.sim.addCoonection(f'TaskInh', f'Task{id}', 'GABA', 50.0)
+        self.sim.addCoonection(f'Switch{pos}', f"Ordinal{str(pos)+'.0'}", 'AMPA', 3.0)
                 
 
     def declareNodeNeurons(self, id, fork_task_weight=None):
@@ -125,10 +125,10 @@ class SNNStateMachine:
                         continue
                     self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
                     prev_id = id
-                self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 0.25)
-                self.sim.addCoonection(f'Shifter{pair[0]+(pair[1]-1)/10}', f'Ordinal{pair[0]}', 'AMPA', 0.4)
-                self.sim.addCoonection(f"Switch{pair[0]}", 'OrdinalInh', 'AMPA', 1.0)
-                self.sim.addCoonection(f'Ordinal{pair[0]}', f'OrdinalInh{pair[0]}', 'AMPA', 0.3)
+                self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 0.5)
+                self.sim.addCoonection(f'Shifter{pair[0]+(pair[1]-1)/10}', f'Ordinal{pair[0]}', 'AMPA', 1.0)
+                #self.sim.addCoonection(f"Switch{pair[0]}", 'OrdinalInh', 'AMPA', 1.0)
+                #self.sim.addCoonection(f'Ordinal{pair[0]}', f'OrdinalInh{pair[0]}', 'AMPA', 0.3)
 
     def spawnAttractor(self, start, duration, stimulus_type, *args):
         self.sim.addStimulus(stimulus_type, (start, start + duration), 'Ordinal0', *args)
@@ -286,17 +286,17 @@ class SNNStateMachine:
         colors = []
         colors_node = [f'C{i//10}' for i in range(30)]
         for branch_info in self.fork_pos_len_w:
-            num_branch_neuron += branch_info[1]*30 + 30
-            branch_neuron_labels.extend([f'Inh{branch_info[0]}', f'Switch{branch_info[0]}'])
+            num_branch_neuron += branch_info[1]*30 + 10
+            branch_neuron_labels.extend([f'Switch{branch_info[0]}'])
             branch_neuron_labels.extend([f'Node{branch_info[0]}.{i}' for i in range(branch_info[1])])
-            colors.extend(f'C{i//10+7}' for i in range(30))
+            colors.extend(f'C{i//10+9}' for i in range(10))
             colors.extend(colors_node*branch_info[1])
             if branch_ytick:
-                branch_ytick.extend([branch_ytick[-1]+25, branch_ytick[-1]+40])
-                branch_hl.extend([branch_hl[-1]+30, branch_hl[-1]+50, branch_hl[-1]+60])
+                branch_ytick.extend([branch_ytick[-1]+20])
+                branch_hl.extend([branch_hl[-1]+30, branch_hl[-1]+40])
             else:
-                branch_ytick.extend([25,40])
-                branch_hl.extend([30, 50, 60])
+                branch_ytick.extend([20])
+                branch_hl.extend([30, 40])
             tail = branch_ytick[-1]
             hl_tail = branch_hl[-1]
             branch_hl.extend([x for x in range(hl_tail+30, tail+branch_info[1]*30, 30)])
