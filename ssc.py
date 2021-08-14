@@ -6,7 +6,7 @@ import networkx as nx
 
 from flysim_format import FlysimSNN
 
-class SNNStateMachine:
+class SNNSequenceControl:
 
     def __init__(self, trunk_length, fork_pos_len_w=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100):
         self.length = trunk_length
@@ -397,7 +397,7 @@ def shuffle(self, trunk_length=0, fork_probability=0, num_transition=0, switch_p
 
 
 if __name__ == '__main__':
-    ssm = SNNStateMachine(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
+    ssm = SNNSequenceControl(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
     ssm.setTransitionPeriod(500, 50, 500)
     ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
     ssm.generateTransitionStimuli('spike', 'AMPA', 250)

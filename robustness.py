@@ -2,7 +2,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 
-from ssm import SNNStateMachine
+from ssc import SNNSequenceControl
 
 
 if __name__ == '__main__':
@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     num_trial = 100
 
-    ssm = SNNStateMachine(20, transitions=19, experiment_time=10000, repetition=100)
+    ssm = SNNSequenceControl(20, transitions=19, experiment_time=10000, repetition=100)
     ssm.setTransitionPeriod(500, 50, 500)
     ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
     ssm.generateTransitionStimuli('spike', 'AMPA', 250)

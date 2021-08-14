@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 
-from ssm import SNNStateMachine
+from ssc import SNNSequenceControl
 
 if __name__ == '__main__':
 
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     for strength in range(50, 800, 50):
         row = []
         for weight in range(1, 10, 1):
-            ssc = SNNStateMachine(2, transitions=1, task_weights=[weight, weight], experiment_time=1000, repetition=100)
+            ssc = SNNSequenceControl(2, transitions=1, task_weights=[weight, weight], experiment_time=1000, repetition=100)
             ssc.setTransitionPeriod(500, duration, 500)
             ssc.generateTransitionStimuli('spike', 'AMPA', float(strength))
             ssc.spawnAttractor(100, 50, 'spike', 'AMPA', 400)

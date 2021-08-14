@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from flysim_format import FlysimSNN
-from ssm import SNNStateMachine
+from ssc import SNNSequenceControl
 
 
 if __name__ == '__main__':
@@ -18,7 +18,7 @@ if __name__ == '__main__':
         for d in stimulus_duration_list:
             row = []
             for s in stimulus_strength_list:
-                ssm = SNNStateMachine(5, transitions=4, experiment_time=5000, repetition=10)
+                ssm = SNNSequenceControl(5, transitions=4, experiment_time=5000, repetition=10)
                 ssm.setTransitionPeriod(1000, d, 1000)
                 ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
                 ssm.generateTransitionStimuli('spike', 'AMPA', s)
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             for d in stimulus_duration_list:
                 row = []
                 for s in stimulus_strength_list:
-                    ssm = SNNStateMachine(2, transitions=1, task_weights=[w, w], experiment_time=1000, repetition=10)
+                    ssm = SNNSequenceControl(2, transitions=1, task_weights=[w, w], experiment_time=1000, repetition=10)
                     ssm.setTransitionPeriod(500, d, 1000)
                     ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
                     ssm.generateTransitionStimuli('spike', 'AMPA', s)
@@ -128,7 +128,7 @@ if __name__ == '__main__':
             for strength in range(100, 1000, 100):
                 row = []
                 for duration in range(50, 500, 50):
-                    ssc = SNNStateMachine(2, transitions=1, task_weights=[weight, weight], experiment_time=1000, repetition=1)
+                    ssc = SNNSequenceControl(2, transitions=1, task_weights=[weight, weight], experiment_time=1000, repetition=1)
                     ssc.setTransitionPeriod(500, duration, 500)
                     ssc.generateTransitionStimuli('spike', 'AMPA', strength)
                     ssc.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
