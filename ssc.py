@@ -8,11 +8,12 @@ from flysim_format import FlysimSNN
 
 class SNNSequenceControl:
 
-    def __init__(self, trunk_length, fork_pos_len_w=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100):
+    def __init__(self, trunk_length, fork_pos_len_w=None, task_weights=None, transitions=0, experiment_time=1000, repetition=100, filename_base='ssc'):
+        self.sequence = nx.DiGraph()
         self.length = trunk_length
         self.transitions = transitions
         self.fork_pos_len_w = fork_pos_len_w
-        self.log_filename_base = 'ssc'
+        self.log_filename_base = filename_base
         self.repete = repetition
         self.sim = FlysimSNN(experiment_time, repetition, self.log_filename_base)
         self.stimulus = {'total_time': experiment_time, 'individual': []}
@@ -22,6 +23,18 @@ class SNNSequenceControl:
         self.spawnNodes()
         self.assembleNodes()
         self.setOutputs()
+
+    def registerTask(self, anchor=0, task_weight=0):
+        if nx.number_of_nodes(self.sequence):
+            if anchor == 0:
+                max(list(self.sequence.nodes))
+                self.sequence.add_node()
+        else:
+            self.sequence.add_node('0')
+
+    def registerBranch(self):
+        pass
+    
 
     def spawnNodes(self):
         self.sim.addNeuron('OrdinalInh', n=self.population_size, taum=5, layer=4)
@@ -44,6 +57,7 @@ class SNNSequenceControl:
             self.sim.addCoonection('CurrentStatus', 'Next', 'AMPA', 1.0)
         for id in range(self.length):
             self.declareNodeNeurons(id)
+            self.sequence.add_node(str(id), bump_gt=[], layer=1)
             self.sim.addCoonection(f'Ordinal{id}', 'OrdinalInh', 'AMPA', 0.5)
             self.sim.addCoonection(f'Task{id}', 'TaskInh', 'AMPA', 1.0)
             self.sim.addCoonection('Next', f'Shifter{id}', 'AMPA', 2.0)
@@ -76,6 +90,7 @@ class SNNSequenceControl:
                 self.declareNodeNeurons(id, w)
             else:
                 self.declareNodeNeurons(id)
+            self.sequence.add_node(str(id), bump_gt=[], layer=2)
             #self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh{pos}', 'AMPA', 0.5)
             self.sim.addCoonection(f'Ordinal{id}', f'OrdinalInh', 'AMPA', 0.5)
             #self.sim.addCoonection(f'Task{id}', f'TaskInh{pos}', 'AMPA', 1.0)
@@ -101,11 +116,11 @@ class SNNSequenceControl:
         self.sim.addCoonection(f'Ordinal{id}', f'Task{id}', 'AMPA', 4)
         self.sim.addCoonection(f'Ordinal{id}', f'Shifter{id}', 'AMPA', 0.4)
         self.sim.addCoonection(f'Ordinal{id}', f'Ordinal{id}', 'AMPA', 2.5)
-        if self.task_weights:
-            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', self.task_weights[id])
         if fork_task_weight:
             self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', fork_task_weight)
-            
+        elif self.task_weights:
+            self.sim.addCoonection(f'Task{id}', 'TaskTarget', 'AMPA', self.task_weights[id])
+
 
     def assembleNodes(self):
         prev_id = -1
@@ -114,6 +129,7 @@ class SNNSequenceControl:
                 prev_id = id
                 continue
             self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
+            self.sequence.add_edge(str(prev_id), str(id))
             prev_id = id
         if self.fork_pos_len_w:
             for pair in self.fork_pos_len_w:
@@ -124,9 +140,12 @@ class SNNSequenceControl:
                         prev_id = id
                         continue
                     self.sim.addCoonection(f'Shifter{prev_id}', f'Ordinal{id}', 'AMPA', 1.0)
+                    self.sequence.add_edge(str(prev_id), str(id))
                     prev_id = id
                 self.sim.addCoonection(f'Shifter{pair[0]}', f"Ordinal{str(pair[0]) + '.0'}", 'AMPA', 0.5)
                 self.sim.addCoonection(f'Shifter{pair[0]+(pair[1]-1)/10}', f'Ordinal{pair[0]}', 'AMPA', 1.0)
+                self.sequence.add_edge(str(pair[0]), str(str(pair[0]) + '.0'))
+                self.sequence.add_edge(str(pair[0]+(pair[1]-1)/10), str(pair[0]))
                 #self.sim.addCoonection(f"Switch{pair[0]}", 'OrdinalInh', 'AMPA', 1.0)
                 #self.sim.addCoonection(f'Ordinal{pair[0]}', f'OrdinalInh{pair[0]}', 'AMPA', 0.3)
 
@@ -165,7 +184,12 @@ class SNNSequenceControl:
         self.sim.defineOutput('Spike', f'{self.log_filename_base}_task.dat', 'Task')
 
     def startSimulation(self, thread=1):
+        self.generateConfProFile()
         self.sim.start(thread)
+
+    def generateConfProFile(self):
+        self.sim.generateConf()
+        self.sim.generatePro()
 
     def getBumps(self, spike_ratios, threshold=0.5):
         """Find the intervals of spike ratios are greater than the threshold."""
@@ -214,6 +238,12 @@ class SNNSequenceControl:
                     transitions.append((transition_point, direction))
         return transitions
 
+    def setGroundTruthBumps(self):
+        prev_start = None
+        for i in range(self.transitions):
+            start = self.stimulus['start'] + i*self.stimulus['interval']
+            self.sequence[str(i)]['bump_gt'] = start/(self.time_window*1000)
+
     def getGroundTruthTransition(self):
         gt = []
         for i in range(self.transitions):
@@ -224,7 +254,7 @@ class SNNSequenceControl:
     def getNumberConsecutiveSuccessTransitions(self, transitions, ground_truth):
         counter = 0
         for real, expect in zip(transitions, ground_truth):
-            if (real[0] - expect[0]) < 3 and (real[1] == expect[1]):
+            if (real[0] - expect[0]) < 3 and (real[0] - expect[0]) >= 0  and (real[1] == expect[1]):
                 counter += 1
         return counter
 
@@ -357,9 +387,13 @@ class SNNSequenceControl:
         if show:
             plt.show()
 
-    def plotNetwork(self):
-        graph = NetworkPlotter(self.sim.network)
-        graph.draw()
+    def plotNetwork(self, mode='net'):
+        if mode == 'net':
+            graph = NetworkPlotter(self.sim.network)
+            graph.draw(mode)
+        elif mode == 'ssc':
+            graph = NetworkPlotter(self.sequence)
+            graph.draw(mode)
 
 class NetworkPlotter:
 
@@ -378,12 +412,17 @@ class NetworkPlotter:
         if self.blocking == False:
             plt.ion()
 
-    def draw(self):
-        pos = nx.multipartite_layout(self.graph, subset_key='layer', align='horizontal')
-        color = [self.subset_color[data["layer"]] for v, data in self.graph.nodes(data=True)]
-        nx.draw(self.graph, pos, node_color=color, with_labels=True, font_weight='bold')
-        weights = nx.get_edge_attributes(self.graph, 'weight')
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=weights)
+    def draw(self, mode):
+        if mode == 'net':
+            pos = nx.multipartite_layout(self.graph, subset_key='layer', align='horizontal')
+            color = [self.subset_color[data["layer"]] for v, data in self.graph.nodes(data=True)]
+            nx.draw(self.graph, pos, node_color=color, with_labels=True, font_weight='bold')
+            weights = nx.get_edge_attributes(self.graph, 'weight')
+            nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=weights)
+        elif mode == 'ssc':
+            pos = nx.multipartite_layout(self.graph, subset_key='layer', align='horizontal')
+            color = [self.subset_color[data["layer"]] for v, data in self.graph.nodes(data=True)]
+            nx.draw(self.graph, pos, node_color=color, with_labels=True, font_weight='bold')
         if self.blocking == True:
             plt.show()
 
@@ -397,10 +436,11 @@ def shuffle(self, trunk_length=0, fork_probability=0, num_transition=0, switch_p
 
 
 if __name__ == '__main__':
-    ssm = SNNSequenceControl(5, transitions=4, task_weights=[1, 1, 2, 1, 3], experiment_time=3000, repetition=1)
-    ssm.setTransitionPeriod(500, 50, 500)
-    ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
-    ssm.generateTransitionStimuli('spike', 'AMPA', 250)
-    ssm.startSimulation()
+    ssc = SNNSequenceControl(5, transitions=4, fork_pos_len_w=[(2, 1, 1)], task_weights=[1, 1, 4, 4, 1], experiment_time=10000, repetition=1, filename_base='drone_v1')
+    ssc.generateConfProFile()
+    #ssm.setTransitionPeriod(500, 50, 500)
+    #ssm.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
+    #ssm.generateTransitionStimuli('spike', 'AMPA', 250)
+    #ssm.startSimulation()
     #ssm.calculateRobustness()
-    ssm.plotRaster()
+    #ssm.plotRaster()

@@ -21,7 +21,8 @@ if __name__ == '__main__':
         ssc.setTransitionPeriod(1000, [60, 70, 90, 120], 500)
         ssc.generateTransitionStimuli('spike', 'AMPA', 250)
 
-    ssc.plotNetwork()
+    print(ssc.sequence.nodes.data())
+    ssc.plotNetwork(mode='ssc')
     ssc.spawnAttractor(100, 50, 'spike', 'AMPA', 400)
-    ssc.startSimulation()
-    ssc.plotRaster()
+    #ssc.startSimulation()
+    #ssc.plotRaster()

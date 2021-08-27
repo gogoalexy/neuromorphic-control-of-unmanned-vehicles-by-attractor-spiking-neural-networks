@@ -5,8 +5,9 @@ import numpy as np
 
 class FlysimSNN:
 
-    def __init__(self, trial_time, iterations, dat_base_name='network'):
+    def __init__(self, trial_time, iterations, dat_base_name='network', seed=None):
         self.flysim_target = 'simulators/sim08_15/flysim.out'
+        self.seed = seed
         self.network = nx.DiGraph()
         self.subgraph = {}
         self.iter = iterations
@@ -90,9 +91,10 @@ class FlysimSNN:
             return True
 
     def start(self, thread=1):
-        self.generateConf()
-        self.generatePro()
-        subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter), '-t', str(thread)])
+        if self.seed:
+            subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter), '-t', str(thread), '-udfsed', str(self.seed)])
+        else:
+            subprocess.call([self.flysim_target, '-conf', self.conf_name, '-pro', self.pro_name, '-rp', str(self.iter), '-t', str(thread)])
     
 
 class NeuralPopulation:
